@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, send_file, jsonify, after_this_request
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
+from flask_migrate import Migrate
 import os
 import shutil
 from datetime import datetime
@@ -23,18 +24,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PREFERRED_URL_SCHEME'] = 'https'  # للتأكد من استخدام HTTPS
 
-# Initialize SQLAlchemy with app
+# Initialize SQLAlchemy and Migrations with app
 db.init_app(app)
+migrate = Migrate(app, db)
 
 def init_db():
     """Initialize database and create default users if they don't exist"""
     try:
-        print("Starting database initialization...")
+        print("Checking for default users...")
         with app.app_context():
-            # Create tables if they don't exist
-            db.create_all()
-            
-            # Check if we need to create default users
+            # Only create default users if they don't exist
             if not User.query.first():
                 print("No users found. Creating default users...")
                 admin = User(
@@ -53,7 +52,6 @@ def init_db():
                 print("Default users created successfully!")
             else:
                 print("Default users already exist.")
-            print("Database initialization completed successfully!")
     except Exception as e:
         print(f"Error in database initialization: {str(e)}")
         if 'db' in locals() and hasattr(db, 'session'):
