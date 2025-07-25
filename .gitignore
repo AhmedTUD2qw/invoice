@@ -10,3 +10,6 @@ venv/
 static/uploads/*
 static/temp/*
 .DS_Store
+instance/
+check_cloudinary.py
+test_cloudinary.py
