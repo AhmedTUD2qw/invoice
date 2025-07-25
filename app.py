@@ -27,24 +27,26 @@ db.init_app(app)
 # Create tables
 with app.app_context():
     try:
-        # Drop all tables to ensure clean state
-        db.drop_all()
         # Create all tables
         db.create_all()
-        # Create default users
-        admin = User(
-            username='admin',
-            password=generate_password_hash('admin123'),
-            role='admin'
-        )
-        seller = User(
-            username='seller',
-            password=generate_password_hash('seller123'),
-            role='seller'
-        )
-        db.session.add(admin)
-        db.session.add(seller)
-        db.session.commit()
+        
+        # Check if users already exist
+        if not User.query.first():
+            # Create default users
+            admin = User(
+                username='admin',
+                password=generate_password_hash('admin123'),
+                role='admin'
+            )
+            seller = User(
+                username='seller',
+                password=generate_password_hash('seller123'),
+                role='seller'
+            )
+            db.session.add(admin)
+            db.session.add(seller)
+            db.session.commit()
+            print("Default users created successfully!")
         print("Database initialized successfully!")
     except Exception as e:
         print(f"Error initializing database: {str(e)}")
@@ -208,17 +210,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
-            login_user(user)
-            if user.role == 'seller':
-                return redirect(url_for('upload_invoice'))
+        try:
+            username = request.form['username']
+            password = request.form['password']
+            user = User.query.filter_by(username=username).first()
+            if user and check_password_hash(user.password, password):
+                login_user(user)
+                if user.role == 'seller':
+                    return redirect(url_for('upload_invoice'))
+                else:
+                    return redirect(url_for('admin_view'))
             else:
-                return redirect(url_for('admin_view'))
-        else:
-            flash('بيانات الدخول غير صحيحة')
+                flash('بيانات الدخول غير صحيحة')
+        except Exception as e:
+            print(f"Login error: {str(e)}")
+            flash('حدث خطأ في تسجيل الدخول')
     return render_template('login.html')
 
 # رفع فاتورة (للبائع)
