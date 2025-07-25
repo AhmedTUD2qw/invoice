@@ -31,8 +31,12 @@ migrate = Migrate(app, db)
 def init_db():
     """Initialize database and create default users if they don't exist"""
     try:
-        print("Checking for default users...")
+        print("Starting database initialization...")
         with app.app_context():
+            # Create all tables
+            db.create_all()
+            print("Database tables created successfully!")
+            
             # Only create default users if they don't exist
             if not User.query.first():
                 print("No users found. Creating default users...")
@@ -70,9 +74,17 @@ def ensure_directories():
         raise
 
 # Initialize database and create directories on startup
-with app.app_context():
-    init_db()
-    ensure_directories()
+def setup_app():
+    with app.app_context():
+        init_db()
+        ensure_directories()
+
+# Call setup only when running directly
+if __name__ == '__main__':
+    setup_app()
+else:
+    # For production/gunicorn
+    setup_app()
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
 
