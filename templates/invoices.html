@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>كل الفواتير</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">كل الفواتير</h3>
+                <form method="get" class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" name="branch" placeholder="اسم الفرع" value="{{ request.args.get('branch', '') }}">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" name="model_name" placeholder="اسم الموديل" value="{{ request.args.get('model_name', '') }}">
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary w-100">فلترة</button>
+                    </div>
+                </form>
+                <a href="{{ url_for('download_all') }}" class="btn btn-success mb-3">تحميل كل الفواتير</a>
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>الصورة</th>
+                            <th>اسم الموديل</th>
+                            <th>الفرع</th>
+                            <th>تاريخ الرفع</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in invoices %}
+                        <tr>
+                            <td><a href="{{ url_for('static', filename='uploads/' + invoice['branch'] + '/' + invoice['image_name']) }}" target="_blank">عرض</a></td>
+                            <td>{{ invoice['model_name'] }}</td>
+                            <td>{{ invoice['branch'] }}</td>
+                            <td>{{ invoice['upload_date'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <a href="{{ url_for('logout') }}" class="btn btn-link mt-3">تسجيل الخروج</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

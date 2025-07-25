@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم المدير - الفواتير</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <link href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-bootstrap-4/bootstrap-4.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #475569;
+            --success-color: #059669;
+            --danger-color: #dc2626;
+            --light-bg: #f1f5f9;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --border-radius: 0.75rem;
+            --heading-color: #1e293b;
+        }
+
+        body {
+            background-color: var(--light-bg) !important;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        /* تحسينات الموبايل */
+        @media (max-width: 768px) {
+            .card-body {
+                padding: 1rem;
+            }
+            
+            .table-responsive {
+                margin: 0 -1rem;
+                width: calc(100% + 2rem);
+            }
+
+            .filter-row {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .filter-row > div {
+                width: 100% !important;
+            }
+
+            .btn-group-mobile {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                width: 100%;
+            }
+
+            .btn-group-mobile .btn {
+                width: 100%;
+            }
+
+            .action-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .table-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+
+        /* تحسينات عامة */
+        .page-header {
+            color: var(--heading-color);
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        .filter-card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            color: var(--heading-color);
+        }
+
+        .filter-body {
+            padding: 1.5rem;
+        }
+
+        /* تحسينات الأزرار */
+        .btn-danger-soft {
+            color: var(--danger-color);
+            background-color: #fee2e2;
+            border: none;
+        }
+
+        .btn-danger-soft:hover {
+            background-color: #fecaca;
+            color: #b91c1c;
+        }
+
+        .delete-confirmation-modal .modal-content {
+            border-radius: var(--border-radius);
+        }
+
+        /* تحسينات الجدول */
+        .table-modern {
+            margin-bottom: 0;
+        }
+
+        .table-modern thead th {
+            background: linear-gradient(to left, var(--primary-color), #1d4ed8);
+            color: white;
+            padding: 1rem 1.5rem;
+            font-weight: 500;
+            border: none;
+        }
+
+        .table-modern tbody tr {
+            transition: all 0.2s ease-in-out;
+        }
+
+        .table-modern tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .table-modern td {
+            padding: 1rem 1.5rem;
+            vertical-align: middle;
+        }
+
+        /* تحسينات القوائم المنسدلة */
+        .select2-container {
+            margin-bottom: 0.5rem;
+        }
+
+        /* تحسين مظهر البطاقات */
+        .card {
+            border: none;
+            border-radius: 1rem;
+            box-shadow: var(--card-shadow);
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        /* تنسيق الأزرار */
+        .btn {
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+            border-color: var(--success-color);
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            border-color: var(--danger-color);
+        }
+
+        /* تنسيقات القسم */
+        .filter-section {
+            background-color: #f8f9fa;
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        /* زر حذف الفرع */
+        .delete-branch-btn {
+            width: 42px;
+            margin-right: 0.5rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.375rem;
+            padding: 0.375rem;
+            height: 38px;
+            transition: all 0.2s;
+        }
+
+        .delete-branch-btn:hover {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        /* تنسيقات الجدول */
+        .table-container {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .table thead th {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+            padding: 1rem;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            padding: 1rem;
+            vertical-align: middle;
+        }
+
+        /* تنسيقات الأزرار */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .btn i {
+            font-size: 1rem;
+            line-height: 1;
+        }
+        /* تحسين تنسيق Select2 */
+        .select2-container {
+            width: 100% !important;
+            direction: rtl;
+        }
+        .select2-selection--single {
+            height: 38px !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 0.5rem !important;
+            background-color: #fff !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+        .select2-selection--single:hover {
+            border-color: var(--primary-color) !important;
+        }
+        .select2-selection--single:focus {
+            border-color: var(--primary-color) !important;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
+        }
+        .select2-selection__rendered {
+            line-height: 36px !important;
+            padding-right: 12px !important;
+            text-align: right !important;
+            color: #1e293b !important;
+        }
+        .select2-selection__arrow {
+            height: 36px !important;
+        }
+        .select2-dropdown {
+            direction: rtl !important;
+            border-radius: 0.5rem !important;
+            box-shadow: var(--card-shadow) !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+        .select2-search__field {
+            direction: rtl !important;
+            padding: 8px !important;
+            border-radius: 0.375rem !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+        .select2-results {
+            text-align: right !important;
+        }
+        .select2-results__option {
+            padding: 8px 12px !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+        .select2-results__option--highlighted {
+            background-color: var(--primary-color) !important;
+        }
+        
+        /* تحسينات التجاوب */
+        @media (max-width: 576px) {
+            .btn i {
+                margin: 0 !important;
+            }
+            .table {
+                font-size: 0.875rem;
+            }
+            .btn-sm {
+                padding: 0.25rem 0.5rem;
+            }
+        }
+        
+        /* تنسيق زر حذف الفرع */
+        .delete-branch-btn {
+            min-width: 46px;
+            border-radius: 0.375rem;
+            margin-right: 0.5rem;
+        }
+        
+        /* تحسينات الجدول */
+        .table-responsive {
+            margin-bottom: 1rem;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+            border-radius: 0.5rem;
+        }
+        
+        .table thead th {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        /* تحسين تنسيق الفلاتر */
+        .filter-section {
+            background-color: #f8f9fa;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        /* تنسيق الأزرار */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn i {
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <a href="{{ url_for('public_upload') }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-arrow-right"></i>
+                                    العودة لرفع الفواتير
+                                </a>
+                                <h3 class="page-header mb-0">إدارة الفواتير</h3>
+                            </div>
+                            <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+                                <i class="bi bi-box-arrow-left"></i>
+                                تسجيل الخروج
+                            </a>
+                        </div>
+
+                        <div class="filter-card">
+                            <div class="filter-header">
+                                <i class="bi bi-funnel-fill me-2"></i>
+                                تصفية الفواتير
+                            </div>
+                            <div class="filter-body">
+                                <form method="get" class="row g-3 align-items-start filter-row">
+                                    <div class="col-md-4">
+                                        <label class="form-label">الفرع</label>
+                                        <select class="form-select branch-select" name="branch">
+                                            <option value="">كل الفروع</option>
+                                            {% for branch in branches %}
+                                            <option value="{{ branch }}" {% if request.args.get('branch') == branch %}selected{% endif %}>{{ branch }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">الموديل</label>
+                                        <select class="form-select model-select" name="model_name">
+                                            <option value="">كل الموديلات</option>
+                                            {% for model in models %}
+                                            <option value="{{ model }}" {% if request.args.get('model_name') == model %}selected{% endif %}>{{ model }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">المشرف المباشر</label>
+                                        <select class="form-select supervisor-select" name="supervisor">
+                                            <option value="">كل المشرفين</option>
+                                            {% for supervisor in supervisors %}
+                                            <option value="{{ supervisor }}" {% if request.args.get('supervisor') == supervisor %}selected{% endif %}>{{ supervisor }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-12 mt-4">
+                                        <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center">
+                                            <div class="btn-group-mobile">
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="bi bi-search"></i>
+                                                    فلترة
+                                                </button>
+                                                {% if request.args.get('branch') or request.args.get('model_name') %}
+                                                <a href="{{ url_for('admin_view') }}" class="btn btn-secondary">
+                                                    <i class="bi bi-x-circle"></i>
+                                                    إلغاء الفلترة
+                                                </a>
+                                                {% endif %}
+                                            </div>
+
+                                            {% if request.args.get('branch') %}
+                                            <button type="button" class="btn btn-danger-soft" id="deleteBranchBtn">
+                                                <i class="bi bi-trash me-1"></i>
+                                                حذف الفرع الحالي
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-3 mb-4 align-items-center">
+                            {% if filtered %}
+                            <a href="{{ url_for('download_filtered', 
+                                branch=request.args.get('branch', ''), 
+                                model_name=request.args.get('model_name', ''),
+                                supervisor=request.args.get('supervisor', '')) }}" 
+                               class="btn btn-success">
+                                <i class="bi bi-download me-1"></i>
+                                تحميل الفواتير المفلترة
+                            </a>
+                            {% else %}
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                قم بتطبيق الفلتر أولاً لتتمكن من تحميل الفواتير
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-modern table-striped table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>اسم الموديل</th>
+                                        <th>الفرع</th>
+                                        <th>المشرف المباشر</th>
+                                        <th>تاريخ الرفع</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for invoice in invoices %}
+                                    <tr>
+                                        <td class="fw-medium">{{ invoice['model_name'] }}</td>
+                                        <td>{{ invoice['branch'] }}</td>
+                                        <td>{{ invoice['supervisor'] }}</td>
+                                        <td>{{ invoice['upload_date'] }}</td>
+                                        <td>
+                                            <div class="table-actions">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-danger-soft delete-btn"
+                                                        data-invoice-id="{{ invoice['id'] }}">
+                                                    <i class="bi bi-trash me-1"></i>
+                                                    حذف
+                                                </button>
+                                                <form id="delete-form-{{ invoice['id'] }}"
+                                                      action="{{ url_for('delete_invoice', invoice_id=invoice['id']) }}"
+                                                      method="POST"
+                                                      style="display: none;">
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal تأكيد حذف الفرع -->
+    <div class="modal fade delete-confirmation-modal" id="deleteBranchModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold text-danger">تأكيد حذف الفرع</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-exclamation-triangle text-warning" style="font-size: 4rem;"></i>
+                    </div>
+                    <p class="text-center fs-5 mb-1">هل أنت متأكد من حذف الفرع:</p>
+                    <p class="text-center fw-bold fs-4 text-danger mb-3" id="branchNameToDelete"></p>
+                    <p class="text-center text-muted">سيتم حذف جميع الفواتير والصور المرتبطة بهذا الفرع بشكل نهائي</p>
+                </div>
+                <div class="modal-footer border-0 justify-content-center gap-2">
+                    <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-danger px-4" id="confirmDeleteBranch">
+                        <i class="bi bi-trash me-1"></i>
+                        تأكيد الحذف
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        $(document).ready(function() {
+            // تهيئة Select2
+            $('.branch-select, .model-select, .supervisor-select').select2({
+                dir: "rtl",
+                language: {
+                    noResults: function() {
+                        return "لا توجد نتائج";
+                    }
+                },
+                placeholder: "اختر...",
+                allowClear: true
+            });
+
+            // تهيئة Modal حذف الفرع
+            const deleteBranchModal = new bootstrap.Modal(document.getElementById('deleteBranchModal'));
+            
+            // حذف فرع بالكامل
+            $('#deleteBranchBtn').on('click', function() {
+                var branch = $('.branch-select').val();
+                if (!branch) {
+                    Swal.fire({
+                        title: 'تنبيه',
+                        text: 'يرجى اختيار الفرع أولاً',
+                        icon: 'info',
+                        confirmButtonText: 'حسناً'
+                    });
+                    return;
+                }
+                
+                // عرض اسم الفرع في Modal
+                $('#branchNameToDelete').text(branch);
+                deleteBranchModal.show();
+            });
+
+            // تأكيد حذف الفرع
+            $('#confirmDeleteBranch').on('click', function() {
+                const branch = $('.branch-select').val();
+                $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>جاري الحذف...');
+                
+                $.post('/delete_branch', {branch: branch}, function(data) {
+                    deleteBranchModal.hide();
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'تم الحذف بنجاح',
+                            text: data.message,
+                            icon: 'success',
+                            confirmButtonText: 'حسناً'
+                        }).then(() => { 
+                            location.reload(); 
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'خطأ',
+                            text: data.message,
+                            icon: 'error',
+                            confirmButtonText: 'حسناً'
+                        });
+                    }
+                }).fail(function() {
+                    deleteBranchModal.hide();
+                    Swal.fire({
+                        title: 'خطأ',
+                        text: 'حدث خطأ أثناء الاتصال بالخادم',
+                        icon: 'error',
+                        confirmButtonText: 'حسناً'
+                    });
+                }).always(function() {
+                    $('#confirmDeleteBranch').prop('disabled', false).html('<i class="bi bi-trash me-1"></i>تأكيد الحذف');
+                });
+            });
+        });
+
+        function showImage(src) {
+            // تحديث مصدر الصورة
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = src;
+            
+            // تحديث رابط التحميل
+            const downloadBtn = document.getElementById('downloadImageBtn');
+            downloadBtn.href = src;
+            
+            // عرض Modal
+            imageModal.show();
+            
+            // تحسين تحميل الصورة
+            modalImage.onload = function() {
+                this.style.opacity = '1';
+            }
+        }
+
+        // إغلاق Modal بالضغط على Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && imageModal._isShown) {
+                imageModal.hide();
+            }
+        });
+
+        $(document).on('click', '.delete-btn', function() {
+            const invoiceId = $(this).data('invoice-id');
+            Swal.fire({
+                title: 'تأكيد الحذف',
+                text: 'هل أنت متأكد من حذف هذه الفاتورة؟',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('delete-form-' + invoiceId).submit();
+                }
+            });
+        });
+
+    </script>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <script>
+            Swal.fire({
+                title: 'تنبيه',
+                text: '{{ messages[0] }}',
+                icon: 'info',
+                confirmButtonText: 'حسناً'
+            });
+        </script>
+        {% endif %}
+    {% endwith %}
+</body>
+</html>
