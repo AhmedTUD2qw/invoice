@@ -28,6 +28,16 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'  # للتأكد من استخدام
 db.init_app(app)
 migrate = Migrate(app, db)
 
+# Configure SQLAlchemy for PostgreSQL
+if 'postgresql' in str(db.engine.url):
+    # Set specific PostgreSQL configurations
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_size': 5,
+        'max_overflow': 2,
+        'pool_timeout': 30,
+        'pool_recycle': 1800,
+    }
+
 def init_db():
     """Initialize database and create default users if they don't exist"""
     try:
@@ -74,27 +84,35 @@ def ensure_directories():
         raise
 
 # Initialize database and create directories on startup
+def check_table_exists(table_name):
+    """Check if a table exists in the database"""
+    try:
+        is_postgres = 'postgresql' in str(db.engine.url)
+        if is_postgres:
+            query = f"SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = '{table_name}')"
+            result = db.session.execute(db.text(query)).scalar()
+        else:
+            query = f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
+            result = db.session.execute(db.text(query)).first() is not None
+        return result
+    except Exception as e:
+        print(f"Error checking table {table_name}: {str(e)}")
+        return False
+
 def setup_app():
     with app.app_context():
         try:
-            # Try to create tables without dropping existing ones
-            db.create_all()
-            print("Database tables created successfully!")
+            print("Starting application setup...")
             
-            # Check database type
-            is_postgres = 'postgresql' in str(db.engine.url)
+            # Check if tables exist before creating them
+            tables_exist = all(check_table_exists(table) for table in ['users', 'invoices'])
             
-            # Get list of existing tables based on database type
-            if is_postgres:
-                tables_query = "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public'"
-            else:
-                tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
+            if not tables_exist:
+                print("Creating database tables...")
+                db.create_all()
+                print("Database tables created successfully!")
                 
-            existing_tables = db.session.execute(db.text(tables_query)).fetchall()
-            print(f"Existing tables: {[table[0] for table in existing_tables]}")
-            
-            # Initialize users only if users table is empty
-            if not db.session.query(User).first():
+                # Only create default users if the users table was just created
                 print("Creating default users...")
                 admin = User(
                     username='admin',
@@ -111,10 +129,16 @@ def setup_app():
                 db.session.commit()
                 print("Default users created successfully!")
             else:
-                print("Default users already exist")
+                print("Database tables already exist, skipping initialization")
             
             ensure_directories()
             print("Application setup completed successfully!")
+            
+        except Exception as e:
+            print(f"Error during setup: {str(e)}")
+            if 'db' in locals() and hasattr(db, 'session'):
+                db.session.rollback()
+            raise
             
         except Exception as e:
             print(f"Error during setup: {str(e)}")
