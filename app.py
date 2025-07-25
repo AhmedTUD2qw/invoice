@@ -113,15 +113,8 @@ def setup_app():
         try:
             print("Starting application setup...")
             
-            # Check if tables exist before creating them
-            tables_exist = all(check_table_exists(table) for table in ['users', 'invoices'])
-            
-            if not tables_exist:
-                print("Creating database tables...")
-                db.create_all()
-                print("Database tables created successfully!")
-                
-                # Only create default users if the users table was just created
+            # Only create default users if there are none
+            if not User.query.first():
                 print("Creating default users...")
                 admin = User(
                     username='admin',
@@ -135,10 +128,14 @@ def setup_app():
                 )
                 db.session.add(admin)
                 db.session.add(seller)
-                db.session.commit()
-                print("Default users created successfully!")
+                try:
+                    db.session.commit()
+                    print("Default users created successfully!")
+                except Exception as e:
+                    print(f"Error creating default users: {str(e)}")
+                    db.session.rollback()
             else:
-                print("Database tables already exist, skipping initialization")
+                print("Default users already exist")
             
             ensure_directories()
             print("Application setup completed successfully!")
