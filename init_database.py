@@ -1,42 +1,40 @@
-import sqlite3
+from app import app
+from models import db, User
 from werkzeug.security import generate_password_hash
 
-DATABASE = 'database.db'
-
 def init_db():
-    print("Creating database tables...")
-    with sqlite3.connect(DATABASE) as db:
-        # إنشاء جدول المستخدمين
-        db.execute('''CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL
-        )''')
+    with app.app_context():
+        print("Creating database tables...")
         
-        # إنشاء جدول الفواتير
-        db.execute('''CREATE TABLE IF NOT EXISTS invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            image_name TEXT NOT NULL,
-            model_name TEXT NOT NULL,
-            branch TEXT NOT NULL,
-            supervisor TEXT NOT NULL,
-            upload_date TEXT NOT NULL,
-            cloudinary_url TEXT,
-            cloudinary_public_id TEXT,
-            user_id INTEGER,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )''')
+        # Drop existing tables
+        print("Dropping existing tables...")
+        db.drop_all()
         
-        # التحقق من وجود المستخدم الافتراضي
-        admin = db.execute('SELECT * FROM users WHERE username = ?', ('admin',)).fetchone()
-        if not admin:
-            print("Creating default admin user...")
-            db.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-                      ('admin', generate_password_hash('admin123'), 'admin'))
+        # Create tables
+        print("Creating tables...")
+        db.create_all()
         
-        db.commit()
-        print("Database initialization completed successfully!")
+        # Create default users
+        print("Creating default users...")
+        admin = User(
+            username='admin',
+            password=generate_password_hash('admin123'),
+            role='admin'
+        )
+        seller = User(
+            username='seller',
+            password=generate_password_hash('seller123'),
+            role='seller'
+        )
+        db.session.add(admin)
+        db.session.add(seller)
+        
+        try:
+            db.session.commit()
+            print("Database initialization completed successfully!")
+        except Exception as e:
+            print(f"Error during initialization: {str(e)}")
+            db.session.rollback()
 
 if __name__ == '__main__':
     init_db()

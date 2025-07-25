@@ -3,10 +3,10 @@ services:
     name: invoice-manager
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python -c "from app import app, db; db.create_all(app=app)" && gunicorn app:app
+    startCommand: python init_database.py && gunicorn app:app --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.0
+        value: 3.11.4
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
@@ -17,3 +17,5 @@ services:
         generateValue: true
       - key: FLASK_ENV
         value: production
+      - key: GUNICORN_TIMEOUT
+        value: 120

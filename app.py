@@ -5,11 +5,9 @@ import shutil
 from datetime import datetime
 import time
 import atexit
-from models import MODELS, db, Invoice
+from models import MODELS, db, Invoice, User
 from werkzeug.utils import secure_filename
-import zipfile
-from werkzeug.utils import secure_filename
-from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 import zipfile
 
 app = Flask(__name__)
@@ -17,15 +15,40 @@ app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key')
 app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['TEMP_FOLDER'] = os.path.join('static', 'temp')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///database.db')
+if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['PREFERRED_URL_SCHEME'] = 'https'  # للتأكد من استخدام HTTPS
 
 # Initialize SQLAlchemy with app
 db.init_app(app)
 
 # Create tables
 with app.app_context():
-    db.create_all()
+    try:
+        # Drop all tables to ensure clean state
+        db.drop_all()
+        # Create all tables
+        db.create_all()
+        # Create default users
+        admin = User(
+            username='admin',
+            password=generate_password_hash('admin123'),
+            role='admin'
+        )
+        seller = User(
+            username='seller',
+            password=generate_password_hash('seller123'),
+            role='seller'
+        )
+        db.session.add(admin)
+        db.session.add(seller)
+        db.session.commit()
+        print("Database initialized successfully!")
+    except Exception as e:
+        print(f"Error initializing database: {str(e)}")
+        db.session.rollback()
 
 # إنشاء المجلدات المطلوبة
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -53,55 +76,23 @@ login_manager.login_view = 'login'
 
 DATABASE = 'database.db'
 
-# User class for flask-login
-class User(UserMixin):
-    def __init__(self, id, username, role):
-        self.id = id
-        self.username = username
-        self.role = role
-
-    def get_id(self):
-        return str(self.id)
-
-# Database helpers
-
-def get_db():
-    try:
-        conn = sqlite3.connect(DATABASE)
-        conn.row_factory = sqlite3.Row
-        return conn
-    except Exception as e:
-        print(f"Database error: {str(e)}")
-        return None
-
 def init_db():
-    conn = sqlite3.connect(DATABASE)
-    try:
-        db = conn.cursor()
-        db.execute('''CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL
-        )''')
-        db.execute('''CREATE TABLE IF NOT EXISTS invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            image_name TEXT NOT NULL,
-            model_name TEXT NOT NULL,
-            branch TEXT NOT NULL,
-            supervisor TEXT NOT NULL,
-            upload_date TEXT NOT NULL,
-            user_id INTEGER,
-            cloudinary_url TEXT,
-            cloudinary_public_id TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )''')
-        conn.commit()
-    except Exception as e:
-        print(f"Error initializing database: {str(e)}")
-        conn.rollback()
-    finally:
-        conn.close()
+    db.create_all()
+    # Create default users if they don't exist
+    if not User.query.first():
+        admin = User(
+            username='admin',
+            password=generate_password_hash('admin123'),
+            role='admin'
+        )
+        seller = User(
+            username='seller',
+            password=generate_password_hash('seller123'),
+            role='seller'
+        )
+        db.session.add(admin)
+        db.session.add(seller)
+        db.session.commit()
 
 # قائمة المشرفين المباشرين
 SUPERVISORS = ['طارق يحيى', 'حسام خطاب', 'جمال عزت']
@@ -136,7 +127,6 @@ def public_upload():
                 return redirect(url_for('public_upload'))
             
             uploaded_files = []
-            db = get_db()
             
             for file in files:
                 if file and file.filename:
@@ -164,13 +154,16 @@ def public_upload():
                             print(f"File successfully uploaded to Cloudinary. Saving to database...")
                             
                             # حفظ معلومات الملف في قاعدة البيانات مع روابط Cloudinary
-                            db.execute('''INSERT INTO invoices 
-                                (image_name, model_name, branch, supervisor, upload_date, cloudinary_url, cloudinary_public_id) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                                (filename, model_name, branch, supervisor,
-                                 datetime.now().strftime('%Y-%m-%d %H:%M'),
-                                 upload_result['url'],
-                                 upload_result['public_id']))
+                            new_invoice = Invoice(
+                                image_name=filename,
+                                model_name=model_name,
+                                branch=branch,
+                                supervisor=supervisor,
+                                upload_date=datetime.now(),
+                                cloudinary_url=upload_result['url'],
+                                cloudinary_public_id=upload_result['public_id']
+                            )
+                            db.session.add(new_invoice)
                             print(f"Database entry created successfully")
                         else:
                             error_msg = upload_result.get('error', 'Unknown error')
@@ -183,7 +176,7 @@ def public_upload():
                         continue
             
             if uploaded_files:
-                db.commit()
+                db.session.commit()
                 flash(f'تم رفع {len(uploaded_files)} ملفات بنجاح')
             else:
                 flash('لم يتم رفع أي ملفات')
@@ -196,9 +189,8 @@ def public_upload():
 
     # جلب قائمة الفروع المستخدمة
     try:
-        db = get_db()
-        branches = db.execute('SELECT DISTINCT branch FROM invoices ORDER BY branch').fetchall()
-        branches = [branch['branch'] for branch in branches]
+        branches = db.session.query(Invoice.branch).distinct().order_by(Invoice.branch).all()
+        branches = [branch[0] for branch in branches]
     except Exception as e:
         print(f"Error fetching branches: {str(e)}")
         branches = []
@@ -208,11 +200,7 @@ def public_upload():
 # User loader for flask-login
 @login_manager.user_loader
 def load_user(user_id):
-    db = get_db()
-    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-    if user:
-        return User(user['id'], user['username'], user['role'])
-    return None
+    return User.query.get(int(user_id))
 
 # تسجيل الدخول للمدير
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -222,12 +210,10 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        db = get_db()
-        user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-        if user and check_password_hash(user['password'], password):
-            user_obj = User(user['id'], user['username'], user['role'])
-            login_user(user_obj)
-            if user['role'] == 'seller':
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            if user.role == 'seller':
                 return redirect(url_for('upload_invoice'))
             else:
                 return redirect(url_for('admin_view'))
@@ -251,10 +237,15 @@ def upload_invoice():
             filename = secure_filename(file.filename)
             save_path = os.path.join(branch_folder, filename)
             file.save(save_path)
-            db = get_db()
-            db.execute('INSERT INTO invoices (image_name, model_name, branch, upload_date, user_id) VALUES (?, ?, ?, ?, ?)',
-                       (filename, model_name, branch, datetime.now().strftime('%Y-%m-%d %H:%M'), current_user.id))
-            db.commit()
+            new_invoice = Invoice(
+                image_name=filename,
+                model_name=model_name,
+                branch=branch,
+                upload_date=datetime.now(),
+                user_id=current_user.id
+            )
+            db.session.add(new_invoice)
+            db.session.commit()
             flash('تم رفع الفاتورة بنجاح')
             return redirect(url_for('upload_invoice'))
         else:
@@ -269,35 +260,29 @@ def admin_view():
         flash('لا يمكنك الوصول إلى هذه الصفحة')
         return redirect(url_for('login'))
         
-    db = get_db()
     branch = request.args.get('branch', '')
     model_name = request.args.get('model_name', '')
     supervisor = request.args.get('supervisor', '')
     
     # جلب قائمة الفروع المتوفرة
-    branches = db.execute('SELECT DISTINCT branch FROM invoices ORDER BY branch').fetchall()
-    branches = [b['branch'] for b in branches]
+    branches = db.session.query(Invoice.branch).distinct().order_by(Invoice.branch).all()
+    branches = [b[0] for b in branches]
     
     # بناء query الفلترة
-    query = 'SELECT * FROM invoices WHERE 1=1'
-    params = []
+    query = Invoice.query
     filtered = False
     
     if branch:
-        query += ' AND branch = ?'
-        params.append(branch)
+        query = query.filter(Invoice.branch == branch)
         filtered = True
     if model_name:
-        query += ' AND model_name = ?'
-        params.append(model_name)
+        query = query.filter(Invoice.model_name == model_name)
         filtered = True
     if supervisor:
-        query += ' AND supervisor = ?'
-        params.append(supervisor)
+        query = query.filter(Invoice.supervisor == supervisor)
         filtered = True
         
-    query += ' ORDER BY upload_date DESC'
-    invoices = db.execute(query, params).fetchall()
+    invoices = query.order_by(Invoice.upload_date.desc()).all()
     
     return render_template('admin.html',
                          invoices=invoices,
@@ -320,47 +305,47 @@ def download_filtered():
         model_name = request.args.get('model_name', '')
         supervisor = request.args.get('supervisor', '')
         
-        db = get_db()
-        query = 'SELECT * FROM invoices WHERE 1=1'
-        params = []
-        
+        query = Invoice.query
+
         if branch:
-            query += ' AND branch = ?'
-            params.append(branch)
+            query = query.filter(Invoice.branch == branch)
         if model_name:
-            query += ' AND model_name = ?'
-            params.append(model_name)
+            query = query.filter(Invoice.model_name == model_name)
         if supervisor:
-            query += ' AND supervisor = ?'
-            params.append(supervisor)
+            query = query.filter(Invoice.supervisor == supervisor)
             
-        invoices = db.execute(query, params).fetchall()
+        invoices = query.all()
         
         if not invoices:
             flash('لا توجد فواتير للتحميل')
             return redirect(url_for('admin_view'))
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        zip_name = f'invoices_{timestamp}.zip'
-        if branch and model_name:
-            zip_name = f'{branch}_{model_name}_{timestamp}.zip'
-        elif branch:
-            zip_name = f'{branch}_{timestamp}.zip'
-        elif model_name:
-            zip_name = f'{model_name}_{timestamp}.zip'
+        # استخدام اسم الملف المرسل من الواجهة، أو إنشاء اسم افتراضي
+        zip_name = request.args.get('filename', None)
+        if not zip_name:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            zip_name = f'invoices_{timestamp}.zip'
+            if branch and model_name:
+                zip_name = f'{branch}_{model_name}_{timestamp}.zip'
+            elif branch:
+                zip_name = f'{branch}_{timestamp}.zip'
+            elif model_name:
+                zip_name = f'{model_name}_{timestamp}.zip'
             
         zip_path = os.path.join(app.config['TEMP_FOLDER'], zip_name)
         
         # تجميع روابط الصور من Cloudinary
         urls = [{
-            'url': invoice['cloudinary_url'],
-            'filename': invoice['image_name'],
-            'branch': invoice['branch'],
-            'model_name': invoice['model_name']
+            'url': invoice.cloudinary_url,
+            'filename': invoice.image_name,
+            'branch': invoice.branch,
+            'model_name': invoice.model_name
         } for invoice in invoices]
         
         # إنشاء ملف ZIP من روابط Cloudinary
-        if create_zip_from_urls(urls, zip_path):
+        success = create_zip_from_urls(urls, zip_path)
+        
+        if success:
             @after_this_request
             def remove_file(response):
                 try:
@@ -372,6 +357,14 @@ def download_filtered():
             return send_file(zip_path, 
                             as_attachment=True, 
                             download_name=zip_name)
+        else:
+            flash('حدث خطأ أثناء إنشاء ملف التحميل')
+            return redirect(url_for('admin_view'))
+                        
+    except Exception as e:
+        print(f"Error in download_filtered: {str(e)}")
+        flash('حدث خطأ أثناء تحميل الملفات')
+        return redirect(url_for('admin_view'))
                         
     except Exception as e:
         print(f"Error in download_filtered: {str(e)}")
@@ -395,15 +388,11 @@ def search_branches():
     if not query:
         return jsonify([])
     
-    db = get_db()
-    branches = db.execute('''
-        SELECT DISTINCT branch 
-        FROM invoices 
-        WHERE branch LIKE ? 
-        ORDER BY branch
-    ''', (f'%{query}%',)).fetchall()
+    branches = db.session.query(Invoice.branch).distinct().filter(
+        Invoice.branch.ilike(f'%{query}%')
+    ).order_by(Invoice.branch).all()
     
-    return jsonify([branch['branch'] for branch in branches])
+    return jsonify([branch[0] for branch in branches])
 
 
 # حذف فرع بالكامل
@@ -420,20 +409,19 @@ def delete_branch():
     try:
         from storage import delete_file
         
-        db = get_db()
         # جلب جميع الفواتير للفرع
-        invoices = db.execute('SELECT * FROM invoices WHERE branch = ?', (branch,)).fetchall()
+        invoices = Invoice.query.filter_by(branch=branch).all()
         
         # حذف الملفات من Cloudinary
         for invoice in invoices:
-            if invoice['cloudinary_public_id']:
-                delete_result = delete_file(invoice['cloudinary_public_id'])
+            if invoice.cloudinary_public_id:
+                delete_result = delete_file(invoice.cloudinary_public_id)
                 if not delete_result['success']:
                     print(f"Error deleting file from Cloudinary: {delete_result.get('error')}")
         
         # حذف من قاعدة البيانات
-        db.execute('DELETE FROM invoices WHERE branch = ?', (branch,))
-        db.commit()
+        Invoice.query.filter_by(branch=branch).delete()
+        db.session.commit()
         
         return jsonify({
             'success': True,
@@ -456,26 +444,106 @@ def delete_invoice(invoice_id):
         
     from storage import delete_file
         
-    db = get_db()
-    invoice = db.execute('SELECT * FROM invoices WHERE id = ?', (invoice_id,)).fetchone()
+    invoice = Invoice.query.get(invoice_id)
     
     if invoice:
         # حذف الملف من Cloudinary
-        if invoice['cloudinary_public_id']:
-            delete_result = delete_file(invoice['cloudinary_public_id'])
+        if invoice.cloudinary_public_id:
+            delete_result = delete_file(invoice.cloudinary_public_id)
             if not delete_result['success']:
                 flash('حدث خطأ أثناء حذف الملف')
                 return redirect(url_for('admin_view'))
             
         # حذف من قاعدة البيانات
-        db.execute('DELETE FROM invoices WHERE id = ?', (invoice_id,))
-        db.commit()
+        db.session.delete(invoice)
+        db.session.commit()
         
         flash('تم حذف الفاتورة بنجاح')
     else:
         flash('الفاتورة غير موجودة')
         
     return redirect(url_for('admin_view'))
+
+# تغيير كلمة المرور
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'غير مصرح لك بهذه العملية'})
+    
+    try:
+        old_password = request.form.get('old_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # التحقق من صحة البيانات
+        if not all([old_password, new_password, confirm_password]):
+            return jsonify({'success': False, 'message': 'جميع الحقول مطلوبة'})
+            
+        if new_password != confirm_password:
+            return jsonify({'success': False, 'message': 'كلمة المرور الجديدة غير متطابقة'})
+            
+        if not check_password_hash(current_user.password, old_password):
+            return jsonify({'success': False, 'message': 'كلمة المرور الحالية غير صحيحة'})
+            
+        # تحديث كلمة المرور
+        current_user.password = generate_password_hash(new_password)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم تغيير كلمة المرور بنجاح'
+        })
+        
+    except Exception as e:
+        print(f"Error changing password: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'حدث خطأ أثناء تغيير كلمة المرور'
+        })
+
+# إدارة المشرفين
+@app.route('/manage_supervisors', methods=['POST'])
+@login_required
+def manage_supervisors():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'غير مصرح لك بهذه العملية'})
+    
+    try:
+        action = request.form.get('action')
+        supervisor = request.form.get('supervisor')
+        
+        if not supervisor:
+            return jsonify({'success': False, 'message': 'يرجى إدخال اسم المشرف'})
+            
+        global SUPERVISORS
+        
+        if action == 'add':
+            if supervisor in SUPERVISORS:
+                return jsonify({'success': False, 'message': 'المشرف موجود بالفعل'})
+            SUPERVISORS.append(supervisor)
+            SUPERVISORS.sort()  # ترتيب القائمة
+            
+        elif action == 'remove':
+            if supervisor not in SUPERVISORS:
+                return jsonify({'success': False, 'message': 'المشرف غير موجود'})
+            SUPERVISORS.remove(supervisor)
+            
+        else:
+            return jsonify({'success': False, 'message': 'عملية غير صالحة'})
+            
+        return jsonify({
+            'success': True,
+            'message': 'تم تحديث قائمة المشرفين بنجاح',
+            'supervisors': SUPERVISORS
+        })
+        
+    except Exception as e:
+        print(f"Error managing supervisors: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'حدث خطأ أثناء تحديث قائمة المشرفين'
+        })
 
 # تسجيل الخروج
 @app.route('/logout')
@@ -485,17 +553,29 @@ def logout():
     return redirect(url_for('login'))
 
 def create_default_users():
-    db = get_db()
-    user_count = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
-    if user_count == 0:
-        # إضافة مدير وبائع افتراضيين
-        db.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-                   ('admin', generate_password_hash('admin123'), 'admin'))
-        db.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-                   ('seller', generate_password_hash('seller123'), 'seller'))
-        db.commit()
+    try:
+        # إضافة مدير وبائع افتراضيين إذا لم يكونوا موجودين
+        if not User.query.first():
+            admin = User(
+                username='admin',
+                password=generate_password_hash('admin123'),
+                role='admin'
+            )
+            seller = User(
+                username='seller',
+                password=generate_password_hash('seller123'),
+                role='seller'
+            )
+            db.session.add(admin)
+            db.session.add(seller)
+            db.session.commit()
+            print("Successfully created default users")
+    except Exception as e:
+        print(f"Error creating default users: {str(e)}")
+        db.session.rollback()
 
 if __name__ == '__main__':
-    init_db()
-    create_default_users()
+    with app.app_context():
+        init_db()
+        create_default_users()
     app.run(debug=True)

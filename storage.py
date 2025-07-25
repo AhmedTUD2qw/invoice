@@ -52,37 +52,60 @@ def upload_file(file, branch, model_name):
         if not connection_ok:
             raise ConnectionError(error_message)
             
-        # Save file temporarily to ensure it's readable
-        temp_path = os.path.join(tempfile.gettempdir(), filename)
-        file.save(temp_path)
+        # Create a unique temporary directory for this upload
+        temp_dir = tempfile.mkdtemp()
+        temp_path = os.path.join(temp_dir, filename)
         
-        print(f"Uploading file {filename} to Cloudinary...")
-        print(f"File size: {os.path.getsize(temp_path)} bytes")
-        print(f"Target folder: invoices/{branch}/{model_name}")
-        
-        # محاولة الرفع مع إعادة المحاولة
-        max_retries = 3
-        for attempt in range(max_retries):
+        try:
+            # Save the file
+            file.save(temp_path)
+            
+            print(f"Uploading file {filename} to Cloudinary...")
+            print(f"File size: {os.path.getsize(temp_path)} bytes")
+            print(f"Target folder: invoices/{branch}/{model_name}")
+            
+            # محاولة الرفع مع إعادة المحاولة
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # رفع الملف إلى Cloudinary
+                    result = cloudinary.uploader.upload(
+                        temp_path,
+                        folder=f"invoices/{branch}/{model_name}",
+                        public_id=os.path.splitext(filename)[0],  # Remove extension from public_id
+                        overwrite=True,
+                        resource_type="auto",
+                        timeout=30  # زيادة مهلة الاتصال
+                    )
+                    break  # نجح الرفع
+                except Exception as upload_error:
+                    if attempt < max_retries - 1:
+                        print(f"Attempt {attempt + 1} failed, retrying...")
+                        time.sleep(2)  # انتظار قبل إعادة المحاولة
+                    else:
+                        raise upload_error  # رفع الخطأ بعد استنفاد جميع المحاولات
+                        
+            return {
+                'success': True,
+                'url': result['secure_url'],
+                'public_id': result['public_id']
+            }
+                
+        except Exception as e:
+            print(f"Error uploading to Cloudinary: {str(e)}")
+            if 'file' in locals() and hasattr(file, 'filename'):
+                print(f"Failed file: {file.filename}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        finally:
+            # تنظيف الملفات المؤقتة
             try:
-                # رفع الملف إلى Cloudinary
-                result = cloudinary.uploader.upload(
-                    temp_path,
-                    folder=f"invoices/{branch}/{model_name}",
-                    public_id=os.path.splitext(filename)[0],  # Remove extension from public_id
-                    overwrite=True,
-                    resource_type="auto",
-                    timeout=30  # زيادة مهلة الاتصال
-                )
-                break  # نجح الرفع
-            except Exception as upload_error:
-                if attempt < max_retries - 1:
-                    print(f"Attempt {attempt + 1} failed, retrying...")
-                    time.sleep(2)  # انتظار قبل إعادة المحاولة
-                else:
-                    raise upload_error  # رفع الخطأ بعد استنفاد جميع المحاولات
-        
-        # Clean up temp file
-        os.remove(temp_path)
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception as e:
+                print(f"Warning: Could not remove temporary directory {temp_dir}: {str(e)}")
         
         print(f"Upload successful. URL: {result.get('secure_url')}")
         
@@ -125,23 +148,85 @@ def create_zip_from_urls(urls, local_path):
     """
     import zipfile
     import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util import Retry
+    
+    # تكوين جلسة requests مع إعادة المحاولة التلقائية
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[500, 502, 503, 504]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
     
     try:
-        with zipfile.ZipFile(local_path, 'w') as zipf:
-            for url_info in urls:
-                response = requests.get(url_info['url'])
-                if response.status_code == 200:
+        print(f"Starting to create ZIP file at {local_path}")
+        print(f"Number of files to process: {len(urls)}")
+        
+        # التأكد من وجود المجلد
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        
+        with zipfile.ZipFile(local_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for index, url_info in enumerate(urls, 1):
+                print(f"\nProcessing file {index}/{len(urls)}")
+                print(f"URL: {url_info['url']}")
+                print(f"Branch: {url_info['branch']}")
+                print(f"Model: {url_info['model_name']}")
+                print(f"Filename: {url_info['filename']}")
+                
+                try:
+                    response = session.get(url_info['url'], timeout=30)
+                    response.raise_for_status()  # سيرفع استثناءً إذا كان الرد غير ناجح
+                    
                     # حفظ الملف في الأرشيف مع المسار المنظم
                     arcname = f"{url_info['branch']}/{url_info['model_name']}/{url_info['filename']}"
+                    
                     # حفظ مؤقت للملف
                     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                         tmp_file.write(response.content)
                         tmp_file.flush()
-                        # إضافة الملف للأرشيف
-                        zipf.write(tmp_file.name, arcname=arcname)
+                        
+                        # التحقق من حجم الملف
+                        file_size = os.path.getsize(tmp_file.name)
+                        print(f"Downloaded file size: {file_size} bytes")
+                        
+                        if file_size > 0:
+                            # إضافة الملف للأرشيف
+                            zipf.write(tmp_file.name, arcname=arcname)
+                            print(f"Added to ZIP: {arcname}")
+                        else:
+                            print(f"Warning: Empty file downloaded for {url_info['filename']}")
+                        
                         # حذف الملف المؤقت
                         os.unlink(tmp_file.name)
-        return True
+                        
+                except requests.exceptions.RequestException as e:
+                    print(f"Error downloading {url_info['filename']}: {str(e)}")
+                    continue
+                except Exception as e:
+                    print(f"Error processing {url_info['filename']}: {str(e)}")
+                    continue
+        
+        # التحقق من حجم ملف ZIP النهائي
+        zip_size = os.path.getsize(local_path)
+        print(f"\nFinal ZIP file size: {zip_size} bytes")
+        
+        if zip_size > 0:
+            print("ZIP file created successfully!")
+            return True
+        else:
+            print("Error: Created ZIP file is empty")
+            return False
+            
     except Exception as e:
         print(f"Error creating zip file: {str(e)}")
+        if os.path.exists(local_path):
+            try:
+                os.remove(local_path)
+                print(f"Cleaned up incomplete ZIP file: {local_path}")
+            except:
+                pass
         return False

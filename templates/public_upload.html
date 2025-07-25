@@ -85,7 +85,16 @@
                                 <input type="file" class="form-control" name="invoice_images[]" accept="image/*" multiple required>
                                 <small class="text-muted">يمكنك اختيار عدة صور مرة واحدة</small>
                             </div>
-                            <button type="submit" class="btn btn-success w-100">رفع</button>
+                            <div class="progress mb-3" style="display: none;" id="progress-bar">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%">0%</div>
+                            </div>
+                            <div class="alert alert-success mb-3" style="display: none;" id="success-message">
+                                تم رفع الملفات بنجاح
+                            </div>
+                            <button type="submit" class="btn btn-success w-100" id="upload-button">
+                                رفع الملفات
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -94,6 +103,57 @@
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $('form').on('submit', function(e) {
+            e.preventDefault();
+            
+            const form = $(this);
+            const formData = new FormData(this);
+            const files = $('input[type="file"]')[0].files;
+            const submitButton = $('#upload-button');
+            const progressBar = $('#progress-bar');
+            const progressBarInner = progressBar.find('.progress-bar');
+            const successMessage = $('#success-message');
+            
+            if (files.length === 0) {
+                alert('الرجاء اختيار ملف واحد على الأقل');
+                return;
+            }
+
+            // تهيئة واجهة المستخدم لبدء الرفع
+            submitButton.prop('disabled', true).text('جاري الرفع...');
+            progressBar.show();
+            successMessage.hide();
+            
+            $.ajax({
+                url: '/',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            progressBarInner.width(percent + '%').text(percent + '%');
+                        }
+                    });
+                    return xhr;
+                },
+                success: function(response) {
+                    progressBar.hide();
+                    successMessage.show();
+                    submitButton.text('تم الرفع بنجاح');
+                    setTimeout(() => window.location.reload(), 2000);
+                },
+                error: function(xhr, status, error) {
+                    submitButton.text('حدث خطأ أثناء الرفع');
+                    alert('حدث خطأ أثناء رفع الملفات: ' + error);
+                }
+            });
+        });
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         $(document).ready(function() {

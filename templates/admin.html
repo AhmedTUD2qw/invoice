@@ -353,10 +353,20 @@
                                 </a>
                                 <h3 class="page-header mb-0">إدارة الفواتير</h3>
                             </div>
-                            <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
-                                <i class="bi bi-box-arrow-left"></i>
-                                تسجيل الخروج
-                            </a>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                                    <i class="bi bi-key"></i>
+                                    تغيير كلمة المرور
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#manageSupervisorsModal">
+                                    <i class="bi bi-people"></i>
+                                    إدارة المشرفين
+                                </button>
+                                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+                                    <i class="bi bi-box-arrow-left"></i>
+                                    تسجيل الخروج
+                                </a>
+                            </div>
                         </div>
 
                         <div class="filter-card">
@@ -396,9 +406,11 @@
                                     <div class="col-12 mt-4">
                                         <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center">
                                             <div class="btn-group-mobile">
-                                                <button type="submit" class="btn btn-primary">
-                                                    <i class="bi bi-search"></i>
-                                                    فلترة
+                                                <button type="submit" class="btn btn-primary" id="filterBtn">
+                                                    <span class="btn-text"><i class="bi bi-search"></i> فلترة</span>
+                                                    <div class="spinner-border spinner-border-sm ms-2" style="display: none;" role="status">
+                                                        <span class="visually-hidden">جاري التحميل...</span>
+                                                    </div>
                                                 </button>
                                                 {% if request.args.get('branch') or request.args.get('model_name') %}
                                                 <a href="{{ url_for('admin_view') }}" class="btn btn-secondary">
@@ -417,19 +429,35 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                <!-- شريط تقدم الفلترة -->
+                                <div class="filter-progress alert alert-info mt-3" style="display: none;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>جاري تحميل النتائج...</span>
+                                        <div class="progress" style="width: 200px; height: 6px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <div class="d-flex flex-wrap gap-3 mb-4 align-items-center">
                             {% if filtered %}
-                            <a href="{{ url_for('download_filtered', 
-                                branch=request.args.get('branch', ''), 
-                                model_name=request.args.get('model_name', ''),
-                                supervisor=request.args.get('supervisor', '')) }}" 
-                               class="btn btn-success">
-                                <i class="bi bi-download me-1"></i>
-                                تحميل الفواتير المفلترة
-                            </a>
+                            <div class="d-flex align-items-center gap-3">
+                                <a href="{{ url_for('download_filtered', 
+                                    branch=request.args.get('branch', ''), 
+                                    model_name=request.args.get('model_name', ''),
+                                    supervisor=request.args.get('supervisor', '')) }}" 
+                                   class="btn btn-success" id="downloadBtn">
+                                    <i class="bi bi-download me-1"></i>
+                                    تحميل الفواتير المفلترة
+                                </a>
+                                <div class="progress" style="width: 200px; display: none;" id="download-progress">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 100%"></div>
+                                </div>
+                            </div>
                             {% else %}
                             <div class="alert alert-info mb-0">
                                 <i class="bi bi-info-circle me-2"></i>
@@ -452,20 +480,24 @@
                                 <tbody>
                                     {% for invoice in invoices %}
                                     <tr>
-                                        <td class="fw-medium">{{ invoice['model_name'] }}</td>
-                                        <td>{{ invoice['branch'] }}</td>
-                                        <td>{{ invoice['supervisor'] }}</td>
-                                        <td>{{ invoice['upload_date'] }}</td>
+                                        <td class="fw-medium">{{ invoice.model_name }}</td>
+                                        <td>{{ invoice.branch }}</td>
+                                        <td>{{ invoice.supervisor }}</td>
+                                        <td>{{ invoice.upload_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                                         <td>
-                                            <div class="table-actions">
+                                            <div class="table-actions d-flex gap-2">
+                                                <a href="{{ invoice.cloudinary_url }}" target="_blank" class="btn btn-sm btn-primary">
+                                                    <i class="bi bi-image me-1"></i>
+                                                    عرض
+                                                </a>
                                                 <button type="button"
                                                         class="btn btn-sm btn-danger-soft delete-btn"
-                                                        data-invoice-id="{{ invoice['id'] }}">
+                                                        data-invoice-id="{{ invoice.id }}">
                                                     <i class="bi bi-trash me-1"></i>
                                                     حذف
                                                 </button>
-                                                <form id="delete-form-{{ invoice['id'] }}"
-                                                      action="{{ url_for('delete_invoice', invoice_id=invoice['id']) }}"
+                                                <form id="delete-form-{{ invoice.id }}"
+                                                      action="{{ url_for('delete_invoice', invoice_id=invoice.id) }}"
                                                       method="POST"
                                                       style="display: none;">
                                                 </form>
@@ -632,6 +664,76 @@
 
     </script>
 
+    <!-- Modal تغيير كلمة المرور -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">تغيير كلمة المرور</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label class="form-label">كلمة المرور الحالية</label>
+                            <input type="password" class="form-control" name="old_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">كلمة المرور الجديدة</label>
+                            <input type="password" class="form-control" name="new_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">تأكيد كلمة المرور الجديدة</label>
+                            <input type="password" class="form-control" name="confirm_password" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" id="savePasswordBtn">
+                        <i class="bi bi-check2"></i>
+                        حفظ التغييرات
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal إدارة المشرفين -->
+    <div class="modal fade" id="manageSupervisorsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">إدارة المشرفين</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addSupervisorForm" class="mb-4">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="newSupervisor" placeholder="اسم المشرف الجديد">
+                            <button type="button" class="btn btn-primary" id="addSupervisorBtn">
+                                <i class="bi bi-plus"></i>
+                                إضافة
+                            </button>
+                        </div>
+                    </form>
+                    <div class="list-group" id="supervisorsList">
+                        {% for supervisor in supervisors %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ supervisor }}
+                            <button type="button" class="btn btn-danger-soft btn-sm" 
+                                    onclick="removeSupervisor('{{ supervisor }}')">
+                                <i class="bi bi-x"></i>
+                                حذف
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% with messages = get_flashed_messages() %}
         {% if messages %}
         <script>
@@ -644,5 +746,230 @@
         </script>
         {% endif %}
     {% endwith %}
+
+    <script>
+        // دالة لتنسيق التاريخ والوقت
+        function getFormattedDateTime() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+        }
+
+        // معالجة تحميل الملفات
+        $('#downloadBtn').on('click', function(e) {
+            e.preventDefault();
+            const btn = $(this);
+            const progressBar = $('#download-progress');
+            
+            // تجميع معلومات الفلتر
+            const branch = '{{ request.args.get("branch", "") }}';
+            const model = '{{ request.args.get("model_name", "") }}';
+            const supervisor = '{{ request.args.get("supervisor", "") }}';
+            
+            // إنشاء اسم الملف
+            let fileName = 'invoices';
+            if (branch) fileName += `_${branch}`;
+            if (model) fileName += `_${model}`;
+            if (supervisor) fileName += `_${supervisor}`;
+            fileName += `_${getFormattedDateTime()}.zip`;
+            
+            // تحديث رابط التحميل مع الاسم الجديد
+            const baseUrl = btn.attr('href').split('?')[0];
+            const params = new URLSearchParams(btn.attr('href').split('?')[1]);
+            params.set('filename', fileName);
+            const newUrl = `${baseUrl}?${params.toString()}`;
+            
+            btn.hide();
+            progressBar.show();
+            
+            // نقوم بتأخير التحميل لثانيتين لعرض شريط التقدم
+            setTimeout(() => {
+                progressBar.hide();
+                btn.show();
+                // تنفيذ التحميل
+                window.location.href = newUrl;
+            }, 2000);
+        });
+
+        // تغيير كلمة المرور
+        $('#savePasswordBtn').on('click', function() {
+            const form = $('#changePasswordForm');
+            const btn = $(this);
+            
+            // التحقق من تطابق كلمات المرور
+            const newPassword = form.find('[name="new_password"]').val();
+            const confirmPassword = form.find('[name="confirm_password"]').val();
+            
+            if (newPassword !== confirmPassword) {
+                Swal.fire({
+                    title: 'خطأ',
+                    text: 'كلمة المرور الجديدة غير متطابقة',
+                    icon: 'error',
+                    confirmButtonText: 'حسناً'
+                });
+                return;
+            }
+            
+            // إرسال طلب تغيير كلمة المرور
+            btn.prop('disabled', true)
+               .html('<span class="spinner-border spinner-border-sm me-2"></span>جاري الحفظ...');
+            
+            $.post('/change_password', form.serialize(), function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        title: 'تم',
+                        text: response.message,
+                        icon: 'success',
+                        confirmButtonText: 'حسناً'
+                    }).then(() => {
+                        $('#changePasswordModal').modal('hide');
+                        form[0].reset();
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'خطأ',
+                        text: response.message,
+                        icon: 'error',
+                        confirmButtonText: 'حسناً'
+                    });
+                }
+            }).fail(function() {
+                Swal.fire({
+                    title: 'خطأ',
+                    text: 'حدث خطأ أثناء الاتصال بالخادم',
+                    icon: 'error',
+                    confirmButtonText: 'حسناً'
+                });
+            }).always(function() {
+                btn.prop('disabled', false)
+                   .html('<i class="bi bi-check2"></i> حفظ التغييرات');
+            });
+        });
+
+        // إضافة مشرف جديد
+        $('#addSupervisorBtn').on('click', function() {
+            const supervisorName = $('#newSupervisor').val().trim();
+            if (!supervisorName) {
+                Swal.fire({
+                    title: 'تنبيه',
+                    text: 'يرجى إدخال اسم المشرف',
+                    icon: 'warning',
+                    confirmButtonText: 'حسناً'
+                });
+                return;
+            }
+            
+            $.post('/manage_supervisors', {
+                action: 'add',
+                supervisor: supervisorName
+            }, function(response) {
+                if (response.success) {
+                    // تحديث قائمة المشرفين
+                    updateSupervisorsList(response.supervisors);
+                    $('#newSupervisor').val('');
+                    
+                    // تحديث القائمة المنسدلة
+                    updateSupervisorSelect(response.supervisors);
+                    
+                    Swal.fire({
+                        title: 'تم',
+                        text: response.message,
+                        icon: 'success',
+                        confirmButtonText: 'حسناً'
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'خطأ',
+                        text: response.message,
+                        icon: 'error',
+                        confirmButtonText: 'حسناً'
+                    });
+                }
+            });
+        });
+
+        // حذف مشرف
+        function removeSupervisor(supervisor) {
+            Swal.fire({
+                title: 'تأكيد الحذف',
+                text: `هل أنت متأكد من حذف المشرف "${supervisor}"؟`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/manage_supervisors', {
+                        action: 'remove',
+                        supervisor: supervisor
+                    }, function(response) {
+                        if (response.success) {
+                            // تحديث قائمة المشرفين
+                            updateSupervisorsList(response.supervisors);
+                            
+                            // تحديث القائمة المنسدلة
+                            updateSupervisorSelect(response.supervisors);
+                            
+                            Swal.fire({
+                                title: 'تم',
+                                text: response.message,
+                                icon: 'success',
+                                confirmButtonText: 'حسناً'
+                            });
+                        } else {
+                            Swal.fire({
+                                title: 'خطأ',
+                                text: response.message,
+                                icon: 'error',
+                                confirmButtonText: 'حسناً'
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        // تحديث قائمة المشرفين في Modal
+        function updateSupervisorsList(supervisors) {
+            const list = $('#supervisorsList');
+            list.empty();
+            
+            supervisors.forEach(supervisor => {
+                list.append(`
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        ${supervisor}
+                        <button type="button" class="btn btn-danger-soft btn-sm" 
+                                onclick="removeSupervisor('${supervisor}')">
+                            <i class="bi bi-x"></i>
+                            حذف
+                        </button>
+                    </div>
+                `);
+            });
+        }
+
+        // تحديث القائمة المنسدلة للمشرفين
+        function updateSupervisorSelect(supervisors) {
+            const select = $('.supervisor-select');
+            const currentValue = select.val();
+            
+            select.empty();
+            select.append('<option value="">كل المشرفين</option>');
+            
+            supervisors.forEach(supervisor => {
+                select.append(`<option value="${supervisor}">${supervisor}</option>`);
+            });
+            
+            select.val(currentValue);
+        }
+    </script>
 </body>
 </html>
