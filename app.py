@@ -28,8 +28,8 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'  # للتأكد من استخدام
 db.init_app(app)
 migrate = Migrate(app, db)
 
-# Configure SQLAlchemy for PostgreSQL
-if 'postgresql' in str(db.engine.url):
+# Configure SQLAlchemy based on database URL
+if database_url.startswith('postgresql'):
     # Set specific PostgreSQL configurations
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_size': 5,
@@ -87,7 +87,7 @@ def ensure_directories():
 def check_table_exists(table_name):
     """Check if a table exists in the database"""
     try:
-        is_postgres = 'postgresql' in str(db.engine.url)
+        is_postgres = database_url.startswith('postgresql')
         if is_postgres:
             query = f"SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = '{table_name}')"
             result = db.session.execute(db.text(query)).scalar()
