@@ -76,15 +76,41 @@ def ensure_directories():
 # Initialize database and create directories on startup
 def setup_app():
     with app.app_context():
-        init_db()
-        ensure_directories()
+        try:
+            # Try to create tables without dropping existing ones
+            db.create_all()
+            
+            # Check if tables exist by querying
+            existing_tables = db.session.execute(db.text("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public'")).fetchall()
+            print(f"Existing tables: {[table[0] for table in existing_tables]}")
+            
+            # Initialize users only if users table is empty
+            if not db.session.query(User).first():
+                print("Creating default users...")
+                admin = User(
+                    username='admin',
+                    password=generate_password_hash('admin123'),
+                    role='admin'
+                )
+                seller = User(
+                    username='seller',
+                    password=generate_password_hash('seller123'),
+                    role='seller'
+                )
+                db.session.add(admin)
+                db.session.add(seller)
+                db.session.commit()
+                print("Default users created successfully!")
+            
+            ensure_directories()
+            print("Application setup completed successfully!")
+            
+        except Exception as e:
+            print(f"Error during setup: {str(e)}")
+            db.session.rollback()
+            raise
 
-# Call setup only when running directly
-if __name__ == '__main__':
-    setup_app()
-else:
-    # For production/gunicorn
-    setup_app()
+setup_app()
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
 
@@ -234,7 +260,7 @@ def public_upload():
 # User loader for flask-login
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # تسجيل الدخول للمدير
 from werkzeug.security import generate_password_hash, check_password_hash
