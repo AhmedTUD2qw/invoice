@@ -79,9 +79,18 @@ def setup_app():
         try:
             # Try to create tables without dropping existing ones
             db.create_all()
+            print("Database tables created successfully!")
             
-            # Check if tables exist by querying
-            existing_tables = db.session.execute(db.text("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public'")).fetchall()
+            # Check database type
+            is_postgres = 'postgresql' in str(db.engine.url)
+            
+            # Get list of existing tables based on database type
+            if is_postgres:
+                tables_query = "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public'"
+            else:
+                tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
+                
+            existing_tables = db.session.execute(db.text(tables_query)).fetchall()
             print(f"Existing tables: {[table[0] for table in existing_tables]}")
             
             # Initialize users only if users table is empty
@@ -101,6 +110,8 @@ def setup_app():
                 db.session.add(seller)
                 db.session.commit()
                 print("Default users created successfully!")
+            else:
+                print("Default users already exist")
             
             ensure_directories()
             print("Application setup completed successfully!")
