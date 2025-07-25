@@ -29,35 +29,52 @@ db.init_app(app)
 def init_db():
     """Initialize database and create default users if they don't exist"""
     try:
-        # Create tables if they don't exist
-        db.create_all()
-        
-        # Check if we need to create default users
-        if not User.query.first():
-            admin = User(
-                username='admin',
-                password=generate_password_hash('admin123'),
-                role='admin'
-            )
-            seller = User(
-                username='seller',
-                password=generate_password_hash('seller123'),
-                role='seller'
-            )
-            db.session.add(admin)
-            db.session.add(seller)
-            db.session.commit()
-            print("Default users created successfully!")
-        print("Database initialization completed!")
+        print("Starting database initialization...")
+        with app.app_context():
+            # Create tables if they don't exist
+            db.create_all()
+            
+            # Check if we need to create default users
+            if not User.query.first():
+                print("No users found. Creating default users...")
+                admin = User(
+                    username='admin',
+                    password=generate_password_hash('admin123'),
+                    role='admin'
+                )
+                seller = User(
+                    username='seller',
+                    password=generate_password_hash('seller123'),
+                    role='seller'
+                )
+                db.session.add(admin)
+                db.session.add(seller)
+                db.session.commit()
+                print("Default users created successfully!")
+            else:
+                print("Default users already exist.")
+            print("Database initialization completed successfully!")
     except Exception as e:
         print(f"Error in database initialization: {str(e)}")
-        db.session.rollback()
-
-# Initialize database on startup - only creates tables and users if they don't exist
-with app.app_context():
-    init_db()
+        if 'db' in locals() and hasattr(db, 'session'):
+            db.session.rollback()
+        raise  # Re-raise the exception to ensure we know if initialization fails
 
 # إنشاء المجلدات المطلوبة
+def ensure_directories():
+    """Ensure required directories exist"""
+    try:
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
+        print("Required directories created successfully")
+    except Exception as e:
+        print(f"Error creating directories: {str(e)}")
+        raise
+
+# Initialize database and create directories on startup
+with app.app_context():
+    init_db()
+    ensure_directories()
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
 
