@@ -26,44 +26,14 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'  # للتأكد من استخدام
 # Initialize SQLAlchemy with app
 db.init_app(app)
 
-# Create tables
 def init_db():
-    with app.app_context():
-        db.create_all()
-        if not User.query.first():
-            admin = User(
-                username='admin',
-                password=generate_password_hash('admin123'),
-                role='admin'
-            )
-            seller = User(
-                username='seller',
-                password=generate_password_hash('seller123'),
-                role='seller'
-            )
-            db.session.add(admin)
-            db.session.add(seller)
-            try:
-                db.session.commit()
-                print("Default users created successfully!")
-            except Exception as e:
-                print(f"Error creating default users: {str(e)}")
-                db.session.rollback()
-
-# Initialize database on startup
-with app.app_context():
-    db.create_all()
-    init_db()
-
-# Create tables
-with app.app_context():
+    """Initialize database and create default users if they don't exist"""
     try:
-        # Create all tables
+        # Create tables if they don't exist
         db.create_all()
         
-        # Check if users already exist
+        # Check if we need to create default users
         if not User.query.first():
-            # Create default users
             admin = User(
                 username='admin',
                 password=generate_password_hash('admin123'),
@@ -78,10 +48,14 @@ with app.app_context():
             db.session.add(seller)
             db.session.commit()
             print("Default users created successfully!")
-        print("Database initialized successfully!")
+        print("Database initialization completed!")
     except Exception as e:
-        print(f"Error initializing database: {str(e)}")
+        print(f"Error in database initialization: {str(e)}")
         db.session.rollback()
+
+# Initialize database on startup - only creates tables and users if they don't exist
+with app.app_context():
+    init_db()
 
 # إنشاء المجلدات المطلوبة
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
