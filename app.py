@@ -109,7 +109,7 @@ SUPERVISORS = ['طارق يحيى', 'حسام خطاب', 'جمال عزت']
 def public_upload():
     if request.method == 'POST':
         try:
-            from storage import upload_file  # استيراد دالة الرفع إلى Cloudinary
+            from drive_storage import upload_file  # استيراد دالة الرفع إلى Google Drive
             
             model_name = request.form.get('model_name', '')
             branch = request.form.get('branch', '')
@@ -310,7 +310,7 @@ def download_filtered():
         return redirect(url_for('login'))
         
     try:
-        from storage import create_zip_from_urls
+        from drive_storage import create_zip_from_urls
         
         branch = request.args.get('branch', '')
         model_name = request.args.get('model_name', '')
@@ -418,7 +418,7 @@ def delete_branch():
         return jsonify({'success': False, 'message': 'لم يتم تحديد الفرع'})
     
     try:
-        from storage import delete_file
+        from drive_storage import delete_file
         
         # جلب جميع الفواتير للفرع
         invoices = Invoice.query.filter_by(branch=branch).all()
