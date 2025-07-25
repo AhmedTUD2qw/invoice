@@ -3,7 +3,7 @@ services:
     name: invoice-manager
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: python -c "from app import app, db; db.create_all(app=app)" && gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
@@ -15,3 +15,5 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
+      - key: FLASK_ENV
+        value: production

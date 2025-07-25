@@ -1,12 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, send_file, jsonify, after_this_request
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
-import sqlite3
 import os
 import shutil
 from datetime import datetime
 import time
 import atexit
-from models import MODELS
+from models import MODELS, db, Invoice
 from werkzeug.utils import secure_filename
 import zipfile
 from werkzeug.utils import secure_filename
@@ -14,10 +13,19 @@ from datetime import datetime
 import zipfile
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # يجب تغييره في الإنتاج
+app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key')
 app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['TEMP_FOLDER'] = os.path.join('static', 'temp')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize SQLAlchemy with app
+db.init_app(app)
+
+# Create tables
+with app.app_context():
+    db.create_all()
 
 # إنشاء المجلدات المطلوبة
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
